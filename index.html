@@ -109,7 +109,8 @@
       console.log("URL השתנה ב-Firebase:", newUrl);
       window.currentUrl = newUrl;
       const iframe = document.getElementById("content-frame");
-      iframe.src = newUrl;
+iframe.src = "https://dry-salad-0aa0.78q26879sh.workers.dev/?url=" + newUrl;
+
 
       document.getElementById("book-animation").style.display = "none";
       document.getElementById("loading-text").style.display = "none";
