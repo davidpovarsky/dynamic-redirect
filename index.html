@@ -1,14 +1,79 @@
 <!DOCTYPE html>
-<html lang="he">
+<html lang="he" >
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>Redirecting...</title>
+<style>
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #f4f1e6;
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  .book {
+    width: 120px;
+    height: 160px;
+    perspective: 800px;
+  }
+
+  .book__cover, .book__page {
+    position: absolute;
+    width: 120px;
+    height: 160px;
+    background: linear-gradient(135deg, #a85a1a, #61340a);
+    border-radius: 8px;
+    box-shadow: 2px 4px 12px rgba(0,0,0,0.3);
+    transform-origin: left;
+    top: 0;
+    left: 0;
+  }
+
+  .book__page {
+    background: #fff8dc;
+    box-shadow: inset 2px 0 8px rgba(0,0,0,0.1);
+    z-index: 2;
+    transform-origin: left;
+    animation: openPage 2s ease forwards;
+  }
+
+  .book__cover {
+    z-index: 3;
+  }
+
+  @keyframes openPage {
+    0% {
+      transform: rotateY(0deg);
+      box-shadow: inset 2px 0 8px rgba(0,0,0,0.1);
+    }
+    100% {
+      transform: rotateY(-120deg);
+      box-shadow: none;
+    }
+  }
+
+  .loading-text {
+    position: absolute;
+    top: 180px;
+    width: 100%;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #5a4b3b;
+    letter-spacing: 0.05em;
+  }
+</style>
 <script>
 async function redirect() {
   try {
     let res = await fetch("https://api.jsonbin.io/v3/b/689b2b06ae596e708fc821af/latest");
     let json = await res.json();
     if (json.record && json.record.url) {
+      // מעט עיכוב כדי שהאנימציה תראה
+      await new Promise(r => setTimeout(r, 2200));
       window.location.href = json.record.url;
     } else {
       document.body.innerHTML = "❌ לא נמצאה כתובת להפניה";
@@ -18,10 +83,14 @@ async function redirect() {
     console.error(err);
   }
 }
-redirect();
+window.onload = redirect;
 </script>
 </head>
 <body>
-טוען הפניה...
+  <div class="book">
+    <div class="book__cover"></div>
+    <div class="book__page"></div>
+  </div>
+  <div class="loading-text">טוען הפניה...</div>
 </body>
 </html>
