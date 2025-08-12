@@ -81,7 +81,7 @@
   </div>
   <div class="loading-text" id="loading-text">טוען הפניה...</div>
   
-  <iframe id="content-frame"></iframe>
+  <iframe id="content-frame" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
 
 <script>
 (() => {
@@ -109,8 +109,56 @@
     }
   }
 
+  // ניסיון לגשת ל-DOM של ה-iframe וליירט לחיצות על קישורים (רק אם אותו מקור)
+  function tryAttachLinkInterceptor() {
+    try {
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      if (!iframeDoc) return;
+
+      // מאזין ללחיצות על קישורים
+      iframeDoc.addEventListener('click', e => {
+        let anchor = e.target;
+        while (anchor && anchor.tagName !== 'A') {
+          anchor = anchor.parentElement;
+        }
+        if (!anchor) return;
+
+        // אם הקישור מנסה להפתח ב-target="_blank" או target אחר שפותח מחוץ לiframe
+        if (anchor.target && anchor.target !== '_self' && anchor.target !== '') {
+          e.preventDefault();
+          const href = anchor.href;
+          if (href) {
+            // טוען את הקישור בתוך הiframe
+            iframe.src = href;
+            // אפשר לעדכן currentUrl כדי לא לטעון שוב מה-API
+            currentUrl = href;
+            console.log("Captured link with target, loading inside iframe:", href);
+          }
+        }
+      }, true); // useCapture כדי לתפוס מוקדם
+    } catch (e) {
+      // כנראה Cross-Origin, לא ניתן לגשת ל-iframe DOM
+      console.warn("Cannot access iframe DOM (likely cross-origin), link interceptor disabled.");
+    }
+  }
+
+  // מאזין לטעינת iframe ומנסה לחבר את היירוט
+  iframe.addEventListener('load', () => {
+    tryAttachLinkInterceptor();
+  });
+
+  // מאזין להודעות postMessage מה-iframe (אם הדף שם שולח)
+  window.addEventListener('message', e => {
+    // ניתן לבדוק e.origin אם רוצים אבטחה
+    const msg = e.data;
+    if (msg && msg.type === 'navigate' && msg.url) {
+      console.log("Received navigation request from iframe via postMessage:", msg.url);
+      iframe.src = msg.url;
+      currentUrl = msg.url;
+    }
+  });
+
   async function init() {
-    // שלב ראשון: הבאת ה-URL הראשוני
     const url = await fetchUrlFromApi();
     if (!url) {
       loadingText.textContent = "❌ לא נמצאה כתובת להפניה";
@@ -121,15 +169,12 @@
     // המתנה לאנימציה (2.2 שניות)
     await new Promise(r => setTimeout(r, 2200));
 
-    // הסתרת האנימציה והטקסט
     bookAnim.style.display = "none";
     loadingText.style.display = "none";
 
-    // הצגת ה-iframe וטעינת ה-URL
     iframe.style.display = "block";
     iframe.src = currentUrl;
 
-    // התחלת בדיקות תקופתיות
     setInterval(async () => {
       const newUrl = await fetchUrlFromApi();
       if (newUrl && newUrl !== currentUrl) {
@@ -143,6 +188,5 @@
   window.onload = init;
 })();
 </script>
-
 </body>
 </html>
