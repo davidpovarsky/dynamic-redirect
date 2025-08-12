@@ -6,6 +6,7 @@
 <style>
   body {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     height: 100vh;
@@ -18,6 +19,7 @@
     width: 120px;
     height: 160px;
     perspective: 800px;
+    position: relative;
   }
 
   .book__cover, .book__page {
@@ -56,41 +58,91 @@
   }
 
   .loading-text {
-    position: absolute;
-    top: 180px;
-    width: 100%;
-    text-align: center;
+    margin-top: 180px;
     font-weight: 600;
     font-size: 1.1rem;
     color: #5a4b3b;
     letter-spacing: 0.05em;
   }
-</style>
-<script>
-async function redirect() {
-  try {
-    let res = await fetch("https://api.jsonbin.io/v3/b/689b2b06ae596e708fc821af/latest");
-    let json = await res.json();
-    if (json.record && json.record.url) {
-      // מעט עיכוב כדי שהאנימציה תראה
-      await new Promise(r => setTimeout(r, 2200));
-      window.location.href = json.record.url;
-    } else {
-      document.body.innerHTML = "❌ לא נמצאה כתובת להפניה";
-    }
-  } catch (err) {
-    document.body.innerHTML = "⚠ שגיאה בטעינת ההפניה";
-    console.error(err);
+
+  iframe#content-frame {
+    width: 100vw;
+    height: 100vh;
+    border: none;
+    display: none;
+    flex-grow: 1;
   }
-}
-window.onload = redirect;
-</script>
+</style>
 </head>
 <body>
-  <div class="book">
+  <div class="book" id="book-animation">
     <div class="book__cover"></div>
     <div class="book__page"></div>
   </div>
-  <div class="loading-text">טוען הפניה...</div>
+  <div class="loading-text" id="loading-text">טוען הפניה...</div>
+  
+  <iframe id="content-frame"></iframe>
+
+<script>
+(() => {
+  const API_URL = "https://api.jsonbin.io/v3/b/689b2b06ae596e708fc821af/latest";
+  const CHECK_INTERVAL_MS = 3000;
+
+  let currentUrl = null;
+  const iframe = document.getElementById("content-frame");
+  const bookAnim = document.getElementById("book-animation");
+  const loadingText = document.getElementById("loading-text");
+
+  async function fetchUrlFromApi() {
+    try {
+      const res = await fetch(API_URL);
+      const json = await res.json();
+      if (json.record && json.record.url) {
+        return json.record.url;
+      } else {
+        console.error("❌ לא נמצאה כתובת להפניה ב-API");
+        return null;
+      }
+    } catch (err) {
+      console.error("⚠ שגיאה בטעינת ה-API", err);
+      return null;
+    }
+  }
+
+  async function init() {
+    // שלב ראשון: הבאת ה-URL הראשוני
+    const url = await fetchUrlFromApi();
+    if (!url) {
+      loadingText.textContent = "❌ לא נמצאה כתובת להפניה";
+      return;
+    }
+    currentUrl = url;
+
+    // המתנה לאנימציה (2.2 שניות)
+    await new Promise(r => setTimeout(r, 2200));
+
+    // הסתרת האנימציה והטקסט
+    bookAnim.style.display = "none";
+    loadingText.style.display = "none";
+
+    // הצגת ה-iframe וטעינת ה-URL
+    iframe.style.display = "block";
+    iframe.src = currentUrl;
+
+    // התחלת בדיקות תקופתיות
+    setInterval(async () => {
+      const newUrl = await fetchUrlFromApi();
+      if (newUrl && newUrl !== currentUrl) {
+        console.log("URL השתנה! טוען מחדש:", newUrl);
+        currentUrl = newUrl;
+        iframe.src = currentUrl;
+      }
+    }, CHECK_INTERVAL_MS);
+  }
+
+  window.onload = init;
+})();
+</script>
+
 </body>
 </html>
