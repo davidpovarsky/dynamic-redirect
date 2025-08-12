@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<title>Redirecting...</title>
+<script>
+async function redirect() {
+  try {
+    let res = await fetch("https://api.jsonbin.io/v3/b/689b2b06ae596e708fc821af/latest");
+    let json = await res.json();
+    if (json.record && json.record.url) {
+      window.location.href = json.record.url;
+    } else {
+      document.body.innerHTML = "❌ לא נמצאה כתובת להפניה";
+    }
+  } catch (err) {
+    document.body.innerHTML = "⚠ שגיאה בטעינת ההפניה";
+    console.error(err);
+  }
+}
+redirect();
+</script>
+</head>
+<body>
+טוען הפניה...
+</body>
+</html>
