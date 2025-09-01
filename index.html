@@ -12,16 +12,16 @@
 <!-- רמז לאייפד לבחור טקסט כהה על רקע לבן -->
 <meta name="theme-color" content="#ffffff">
 
-
 <style>
   body {
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
     background: #f4f1e6;
     margin: 0;
+    padding: 20px;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   }
 
@@ -73,6 +73,87 @@
     font-size: 1.1rem;
     color: #5a4b3b;
     letter-spacing: 0.05em;
+    text-align: center;
+  }
+
+  .history-container {
+    display: none;
+    max-width: 600px;
+    margin-top: 20px;
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    text-align: right;
+    direction: rtl;
+  }
+
+  .history-title {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: #5a4b3b;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #a85a1a;
+    padding-bottom: 8px;
+  }
+
+  .history-item {
+    margin: 10px 0;
+    padding: 12px;
+    background: #f9f7f4;
+    border-radius: 8px;
+    border: 1px solid #e0ddd6;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .history-item:hover {
+    background: #f0ede6;
+    border-color: #a85a1a;
+    transform: translateX(-2px);
+  }
+
+  .history-item-title {
+    font-weight: 600;
+    color: #5a4b3b;
+    margin-bottom: 5px;
+  }
+
+  .history-item-location {
+    font-size: 0.9rem;
+    color: #7a6b5b;
+    margin-bottom: 3px;
+  }
+
+  .history-item-time {
+    font-size: 0.8rem;
+    color: #9a8b7b;
+  }
+
+  .error-message {
+    color: #d32f2f;
+    margin-top: 20px;
+    padding: 15px;
+    background: #ffebee;
+    border-radius: 8px;
+    border: 1px solid #f8bbd9;
+    text-align: center;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #a85a1a;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-left: 10px;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 </style>
 </head>
@@ -82,6 +163,13 @@
     <div class="book__page"></div>
   </div>
   <div class="loading-text" id="loading-text">טוען הפניה...</div>
+  
+  <div class="history-container" id="history-container">
+    <div class="history-title">מקורות אחרונים</div>
+    <div id="history-list"></div>
+  </div>
+  
+  <div class="error-message" id="error-message" style="display: none;"></div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
@@ -90,7 +178,7 @@
   const firebaseConfig = {
     apiKey: "AIzaSyAKJYP86LNjzW_3mXhnEG8BcW9R_Cebf8Y",
     authDomain: "alhatorah-f3641.firebaseapp.com",
-    databaseURL: "https://alhatorah-f3641-default-rtdb.firebaseio.com",
+    databaseURL: "https://alhatorah-f3641-default-rtdb.firebaseio.com/",
     projectId: "alhatorah-f3641",
     storageBucket: "alhatorah-f3641.firebasestorage.app",
     messagingSenderId: "490409539037",
@@ -101,25 +189,205 @@
   const db = getDatabase(app);
   const urlRef = ref(db, 'currentUrl');
 
-  window.currentUrl = null;
+  const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxNHNZyJfSJBcvfuay5Jv5Hx9gMzD0foJU4XUofQ2O6K1wavqQubRFxzwqbTn4m-SEi/exec';
+  const MAX_AGE_SECONDS = 20;
 
-  onValue(urlRef, (snapshot) => {
-    if (!snapshot.exists()) {
-      console.error("❌ אין ערך ב־currentUrl");
+  let currentUrl = null;
+
+  function showError(message) {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+  }
+
+  function hideLoader() {
+    document.getElementById("book-animation").style.display = "none";
+    document.getElementById("loading-text").style.display = "none";
+  }
+
+  function showHistory(backupData) {
+    hideLoader();
+    const historyContainer = document.getElementById('history-container');
+    const historyList = document.getElementById('history-list');
+    
+    if (!backupData) {
+      showError('לא הצלחתי לטעון את הנתונים מהשרת');
       return;
     }
-    const newUrl = snapshot.val();
-    console.log("✅ התקבל URL:", newUrl);
 
-    if (newUrl && newUrl !== window.currentUrl) {
-      window.currentUrl = newUrl;
+    historyList.innerHTML = '';
+    
+    // משלב את כל הנתונים לרשימה אחת ממוינת לפי תאריך
+    const allItems = [];
+    
+    // הוספת הערות אישיות
+    if (backupData.personalNotes && backupData.personalNotes.length > 0) {
+      backupData.personalNotes.forEach(item => {
+        allItems.push({
+          title: 'הערה אישית',
+          location: item.hesource || item.ensource || '',
+          timestamp: item.date_created,
+          url: item.link,
+          type: 'note'
+        });
+      });
+    }
+    
+    // הוספת סימניות
+    if (backupData.bookmarks && backupData.bookmarks.length > 0) {
+      backupData.bookmarks.forEach(item => {
+        allItems.push({
+          title: 'סימנייה',
+          location: item.hesource || item.ensource || '',
+          timestamp: item.date_created,
+          url: item.link,
+          type: 'bookmark'
+        });
+      });
+    }
+    
+    // הוספת היסטוריה
+    if (backupData.personalHistory && backupData.personalHistory.length > 0) {
+      backupData.personalHistory.forEach(item => {
+        allItems.push({
+          title: 'צפייה אחרונה',
+          location: item.hesource || item.ensource || '',
+          timestamp: item.date_viewed,
+          url: item.link,
+          type: 'history'
+        });
+      });
+    }
+    
+    if (allItems.length === 0) {
+      showError('לא נמצאו מקורות אחרונים');
+      return;
+    }
 
-      // הסתרת האנימציה לפני ההפניה
-      document.getElementById("book-animation").style.display = "none";
-      document.getElementById("loading-text").style.display = "none";
+    // מיון לפי תאריך (החדשים קודם)
+    allItems.sort((a, b) => {
+      const dateA = new Date(a.timestamp || 0).getTime();
+      const dateB = new Date(b.timestamp || 0).getTime();
+      return dateB - dateA;
+    });
+    
+    // הצגת רק 10 הפריטים האחרונים
+    const recentItems = allItems.slice(0, 10);
+    
+    recentItems.forEach((item, index) => {
+      const historyItem = document.createElement('div');
+      historyItem.className = 'history-item';
+      
+      const title = item.title || `מקור ${index + 1}`;
+      const location = item.location || '';
+      const timestamp = item.timestamp ? new Date(item.timestamp).toLocaleString('he-IL') : '';
+      const url = item.url || '';
+      
+      // אייקון לפי סוג הפריט
+      const icon = item.type === 'note' ? '📝' : 
+                   item.type === 'bookmark' ? '🔖' : '👁️';
+      
+      historyItem.innerHTML = `
+        <div class="history-item-title">${icon} ${title}</div>
+        <div class="history-item-location">${location}</div>
+        <div class="history-item-time">${timestamp}</div>
+      `;
+      
+      historyItem.addEventListener('click', () => {
+        if (url) {
+          window.location.href = url;
+        }
+      });
+      
+      historyList.appendChild(historyItem);
+    });
+    
+    historyContainer.style.display = 'block';
+  }
 
-      console.log("➡️ מפנה ל:", newUrl);
-      window.location.href = newUrl; // הפניה אמיתית
+  function isDataOld(timestamp) {
+    if (!timestamp) return true;
+    
+    const now = new Date().getTime();
+    const dataTime = new Date(timestamp).getTime();
+    const ageInSeconds = (now - dataTime) / 1000;
+    
+    return ageInSeconds > MAX_AGE_SECONDS;
+  }
+
+  async function fetchFromGoogleScript() {
+    try {
+      document.getElementById("loading-text").innerHTML = 'טוען היסטוריה... <span class="spinner"></span>';
+      
+      const response = await fetch(GOOGLE_SCRIPT_URL);
+      
+      if (!response.ok) {
+        throw new Error(`שגיאת שרת: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('שגיאה בטעינת נתונים מגוגל סקריפט:', error);
+      showError(`שגיאה בטעינת נתונים: ${error.message}`);
+      return null;
+    }
+  }
+
+  onValue(urlRef, async (snapshot) => {
+    if (!snapshot.exists()) {
+      console.error("❌ אין ערך ב־currentUrl");
+      await fetchFromGoogleScript().then(data => {
+        if (data && (data.personalNotes || data.bookmarks || data.personalHistory)) {
+          showHistory(data);
+        }
+      });
+      return;
+    }
+
+    const urlData = snapshot.val();
+    console.log("✅ התקבל נתון:", urlData);
+
+    // בדיקה אם הנתון הוא רק URL או אובייקט עם timestamp
+    let url, timestamp;
+    
+    if (typeof urlData === 'string') {
+      url = urlData;
+      timestamp = null; // נתון ישן ללא timestamp
+    } else if (typeof urlData === 'object') {
+      url = urlData.url;
+      timestamp = urlData.timestamp;
+    }
+
+    // בדיקה אם הנתונים ישנים
+    if (isDataOld(timestamp)) {
+      console.log("⏰ הנתונים ישנים, טוען היסטוריה מגוגל סקריפט");
+      
+      const scriptData = await fetchFromGoogleScript();
+      if (scriptData) {
+        if (scriptData.personalNotes || scriptData.bookmarks || scriptData.personalHistory) {
+          showHistory(scriptData);
+        } else if (scriptData.url) {
+          // אם יש URL חדש, מפנים אליו
+          console.log("➡️ מפנה ל-URL חדש:", scriptData.url);
+          hideLoader();
+          window.location.href = scriptData.url;
+        }
+      }
+      return;
+    }
+
+    // אם הנתונים חדשים ויש URL
+    if (url && url !== currentUrl) {
+      currentUrl = url;
+      console.log("➡️ מפנה ל-URL עדכני:", url);
+      hideLoader();
+      window.location.href = url;
     }
   });
 </script>
